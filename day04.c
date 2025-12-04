@@ -7,7 +7,13 @@
 #define GRIDMAXSIDE     135
 #define ROLL            '@'
 #define EMPTY           '.'
-#define REMOVED         'x'
+
+typedef struct ListElm ListElm;
+
+struct ListElm {
+    int col, row;
+    ListElm *next;
+};
 
 
 
@@ -16,6 +22,9 @@ int main()
     char grid[GRIDMAXSIDE][GRIDMAXSIDE];
     char buffer[BUFLEN];
 
+    ListElm *rollslst = NULL;
+    ListElm *removedlst = NULL;
+
     FILE *fp = fopen("inputs/day04", "r");
     if (!fp) { perror("fopen"); exit(1); }
 
@@ -23,50 +32,68 @@ int main()
     int gridside = strlen(buffer);
 
     for (int row = 0; row < gridside; row++) {
-        for (int col = 0; col < gridside; col++)
-            grid[col][row] = buffer[col];
+        for (int col = 0; col < gridside; col++) {
+            char c = buffer[col];
+            grid[col][row] = c;
+            if (c == ROLL) {
+                ListElm *elm = malloc(sizeof(ListElm));
+                elm->row = row;
+                elm->col = col;
+                elm->next = rollslst;
+                rollslst = elm;
+            }
+        }
         myfgets(buffer, BUFLEN, fp);
     }
 
     fclose (fp);
 
-    int removed, sumremoved = 0;
+    int removed = 0;
+    int totalremoved = 0;
     do {
         removed = 0;
-        for (int row = 0; row < gridside; row++) {
-            for (int col = 0; col < gridside; col++) {
-                char s = grid[col][row];
-                if ((s == ROLL) && (s != REMOVED)) {
-                    int nrolls = 0;
-                    for (int nrow = -1; nrow <= 1; nrow++) {
-                        for (int ncol = -1; ncol <= 1; ncol++) {
-                            if ((nrow == 0) && (ncol == 0)) continue;
-                            int r = row + nrow;
-                            int c = col + ncol;
-                            if (r < 0) continue;
-                            if (c < 0) continue;
-                            if (r >= gridside) continue;
-                            if (c >= gridside) continue;
-                            char s = grid[c][r];
-                            if ((s == ROLL) || (s == REMOVED)) nrolls++;
-                        }
-                    }
-                    if (nrolls < 4) {
-                        removed++;
-                        grid[col][row] = REMOVED;
-                    }
+        ListElm *tmprollslst = NULL;
+        ListElm *elm = rollslst;
+        while (elm != NULL) {
+            ListElm *next = elm->next;
+            int nrolls = 0;
+            for (int nrow = -1; nrow <= 1; nrow++)
+                for (int ncol = -1; ncol <= 1; ncol++) {
+                    if ((nrow == 0) && (ncol == 0)) continue;
+                    int r = elm->row + nrow;
+                    int c = elm->col + ncol;
+                    if (r < 0) continue;
+                    if (c < 0) continue;
+                    if (r >= gridside) continue;
+                    if (c >= gridside) continue;
+                    if (grid[c][r] == ROLL) nrolls++;
                 }
+            if (nrolls < 4) {
+                removed++;
+                elm->next = removedlst;
+                removedlst = elm;
             }
+            else {
+                elm->next = tmprollslst;
+                tmprollslst = elm;
+            }
+            elm = next;
         }
-        sumremoved += removed;
 
-        for (int row = 0; row < gridside; row++)
-            for (int col = 0; col < gridside; col++)
-                if (grid[col][row] == REMOVED)
-                    grid[col][row] = EMPTY;
+        totalremoved += removed;
+
+        elm = removedlst;
+        while (elm != NULL) {
+            ListElm *next = elm->next;
+            grid[elm->col][elm->row] = EMPTY;
+            free(elm);
+            elm = next;
+        }
+        removedlst = NULL;
+        rollslst = tmprollslst;
     } while (removed != 0);
 
-    printf("%i\n", sumremoved);
+    printf("%i\n", totalremoved);
 
     exit(0);
 }
