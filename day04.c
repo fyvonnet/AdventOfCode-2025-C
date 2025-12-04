@@ -48,6 +48,7 @@ int main()
 
     fclose (fp);
 
+    int part1 = 1;
     int removed = 0;
     int totalremoved = 0;
     do {
@@ -81,6 +82,11 @@ int main()
         }
 
         totalremoved += removed;
+
+        if (part1) {
+            printf("%i\n", removed);
+            part1 = 0;
+        }
 
         elm = removedlst;
         while (elm != NULL) {
