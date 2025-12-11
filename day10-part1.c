@@ -16,6 +16,7 @@ typedef struct {
 typedef struct {
     int npresses;
     int lights;
+    int lastpress;
 } QueueElm;
 
 
@@ -58,13 +59,16 @@ int main()
         QueueElm *elm = malloc(sizeof(QueueElm));
         elm->npresses = 0;
         elm->lights = 0;
+        elm->lastpress = -1;
         while (true) {
             if (elm->lights == lights) { sum += elm->npresses; break; }
             for (int b = 0; b < nbuttons; b++) {
+                if (b == elm->lastpress) continue;
                 Button *btnptr = buttons + b;
                 QueueElm *newelm = malloc(sizeof(QueueElm));
                 newelm->npresses = elm->npresses + 1;
                 newelm->lights = elm->lights ^ btnptr->lights;
+                newelm->lastpress = b;
                 deque_push_tail(queue, newelm);
             }
             free(elm);
