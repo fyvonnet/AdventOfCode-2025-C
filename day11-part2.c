@@ -3,25 +3,21 @@
 #include <stdbool.h>
 #include <string.h>
 #include "misc.h"
-#include "redblacktree.h"
 
 #define BUFLEN      200
 #define MAXNDEVS    600
 
-typedef struct ListElm ListElm;
-struct ListElm { int label; ListElm *next; };
-typedef struct { int label; ListElm *outputs;} Device;
-typedef struct { int label; bool dac, fft; unsigned long value; } CacheElm;
+typedef struct ListNode ListNode;
+struct ListNode { int hash; ListNode *next; };
+typedef struct { int hash; ListNode *outputs; long cache[4]; } Device;
 
 int compar_devices(const void *a, const void * b);
-int compar_cacheelms(const void *a, const void * b);
-unsigned long recurse(bool dac, bool fft, int label);
+long recurse(char dac, char fft, int hash);
 int gethash(char *label);
 
 Device devices[MAXNDEVS];
 int ndevices = 0;
-redblacktree *cache;
-int outhash, dachash, ffthash;
+int dachash, ffthash;
 
 
 
@@ -31,62 +27,61 @@ int main()
     if (!fp) { perror("fopen"); exit(1); }
     char buffer[BUFLEN];
 
-    outhash = gethash("out");
     dachash = gethash("dac");
     ffthash = gethash("fft");
 
     while (myfgets(buffer, BUFLEN, fp)) {
         Device *newdev = devices + ndevices++;
         newdev->outputs = NULL;
-        newdev->label   = gethash(buffer);
+        newdev->hash    = gethash(buffer);
+        for (int i = 0; i < 4; i++)
+            newdev->cache[i] = -1;
         char *token = strtok(buffer + 5, " ");
         while (token) {
-            ListElm *newout = malloc(sizeof(ListElm));
-            newout->label   = gethash(token);
+            ListNode *newout = malloc(sizeof(ListNode));
+            newout->hash    = gethash(token);
             newout->next    = newdev->outputs;
             newdev->outputs = newout;
             token = strtok(NULL, " ");
         }
     }
 
-    cache = redblacktree_init(compar_cacheelms);
+    Device *outdev   = devices + ndevices++;
+    outdev->hash     = gethash("out");
+    outdev->outputs  = NULL;
+    outdev->cache[0] = 0;
+    outdev->cache[1] = 0;
+    outdev->cache[2] = 0;
+    outdev->cache[3] = 1;
+
     qsort(devices, ndevices, sizeof(Device), compar_devices);
-    printf("%li\n", recurse(false, false, gethash("svr")));
+    printf("%li\n", recurse(0, 0, gethash("svr")));
 
     exit(0);
 }
 
 
 
-unsigned long recurse(bool dac, bool fft, int label)
+long recurse(char dac, char fft, int hash)
 {
-    if (label == outhash) {
-        if (dac && fft) return 1;
-        else return 0;
-    }
+    if (hash == dachash) dac = 1;
+    else if (hash == ffthash) fft = 1;
 
-    if (label == dachash) dac = true;
-    else if (label == ffthash) fft = true;
+    int index = (dac << 1) + fft;
 
-    CacheElm *elm = malloc(sizeof(CacheElm));
-    elm->label = label;
-    elm->dac   = dac;
-    elm->fft   = fft;
+    Device sdev;
+    sdev.hash = hash;
+    Device *dev = binsearch(devices, ndevices, sizeof(Device), compar_devices, &sdev);
+    long *value = dev->cache + index;
 
-    CacheElm *ret = redblacktree_insert(cache, elm);
-    if (ret == NULL) {
-        Device sdev;
-        sdev.label = label;
-        Device *dev = binsearch(devices, ndevices, sizeof(Device), compar_devices, &sdev);
-        unsigned long sum = 0;
-        for (ListElm *out = dev->outputs; out != NULL; out = out->next)
-            sum += recurse(dac, fft, out->label);
-        elm->value = sum;
-        return sum;
-    }
+    if (*value != -1)
+        return *value;
     else {
-        free(elm);
-        return ret->value;
+        long sum = 0;
+        for (ListNode *out = dev->outputs; out != NULL; out = out->next)
+            sum += recurse(dac, fft, out->hash);
+        *value = sum;
+        return sum;
     }
 }
 
@@ -94,22 +89,7 @@ unsigned long recurse(bool dac, bool fft, int label)
 
 int compar_devices(const void *a, const void * b)
 {
-    Device *aa = (Device *)a;
-    Device *bb = (Device *)b;
-    return aa->label - bb->label;
-}
-
-
-
-int compar_cacheelms(const void *a, const void * b)
-{
-    CacheElm *aa = (CacheElm *)a;
-    CacheElm *bb = (CacheElm *)b;
-    int ret = aa->label - bb->label;
-    if (ret != 0) return ret;
-    ret = aa->dac - bb->dac;
-    if (ret != 0) return ret;
-    return aa->fft - bb->fft;
+    return ((Device *)a)->hash - ((Device *)b)->hash;
 }
 
 
